@@ -52,8 +52,10 @@ async function createBrowser() {
 }
 
 async function main() {
+  console.log("Creating browser...");
   const browser = await createBrowser();
 
+  console.log("Prompting for number of searches...");
   let resultSearchIntValue = prompt(
     "Enter the number of how many searching should be done: "
   );
@@ -62,6 +64,7 @@ async function main() {
     resultSearchIntValue = 4;
   }
 
+  console.log("Starting crawl...");
   await crawlBing(browser, resultSearchIntValue);
 }
 
@@ -72,16 +75,19 @@ function sleep(ms) {
 }
 
 async function crawlBing(browser, randomSearchResultMax) {
-  let page;
   let clickedTaskElement = 1;
+  console.log("Opening new page...");
+  let page = await browser.newPage();
 
-  page = await browser.newPage();
-  // await page.setViewport({ width: 0, height: 0 });
+  console.log("Setting viewport...");
   await page.setViewport({ width: 1920, height: 1080 });
+  await page.setBypassCSP(true);
 
   for (let i = 0; i < randomSearchResultMax; i++) {
+    console.log("Getting random line from file...");
     const randomLine = getRandomLineFromFile("russian_requests_list.txt");
 
+    console.log("Navigating to search page...");
     await page
       .goto(`https://www.bing.com/search?q=${randomLine}`, {
         waitUntil: "networkidle2",
@@ -91,6 +97,7 @@ async function crawlBing(browser, randomSearchResultMax) {
     await page
       .waitForNavigation({ waitUntil: "networkidle2", timeout: 10000 })
       .catch((_) => {});
+    console.log("Waiting...");
     await sleep(5000);
   }
   if (randomSearchResultMax == 0) {
@@ -99,35 +106,69 @@ async function crawlBing(browser, randomSearchResultMax) {
       .catch((_) => {});
   }
 
-  // loop while true
   while (true) {
+    console.log(`Current element ID: ${clickedTaskElement}`)
     await page
       .waitForNavigation({ waitUntil: "networkidle2", timeout: 10000 })
       .catch((_) => {});
-
     await sleep(5000);
 
-    const rewardMenuBtn = await page.click("#id_rh").catch((_) => {});
+    await page.setBypassCSP(true);
 
-    await sleep(5000);
-    await page
-      .waitForNavigation({ waitUntil: "networkidle2", timeout: 10000 })
-      .catch((_) => {});
+    let repeatCount = 0;
+    while (repeatCount < 2) {
+    try {
+      console.log("Wait until id_rh button is loaded...")
+      await page
+        .waitForSelector('#id_rh', {visible: true})
+      await page
+        .waitForNavigation({ waitUntil: "networkidle2", timeout: 10000 })
+        .catch((_) => {});
+      await sleep(2000);
 
-    // const elHandleArray = await page.$$('promo_cont')
-    const elHandleArray = await page.evaluate((clickedTaskElement) => {
+      console.log("Pressing #id_rh button");
+      await page.evaluate(() => {
+        document.getElementById("id_rh").click();
+      });
+  
+      console.log("Wait until panelFlyout is loaded...")
+      await page
+        .waitForSelector('#panelFlyout', {visible: true})
+      await page
+        .waitForNavigation({ waitUntil: "networkidle2", timeout: 10000 })
+        .catch((_) => {});
+      await sleep(2000);
+    } catch (error) {
+        console.error("An error occurred:", error);
+        repeatCount++;
+        continue;
+    } 
+
+    break;
+    
+  }
+    
+    await page.evaluate((clickedTaskElement) => {
       const puzzleSkipBtn = document.getElementById("skipPuzzle");
       if (puzzleSkipBtn) {
         const puzzleSkipBtnValue = puzzleSkipBtn.getElementsByTagName("a")[0];
         puzzleSkipBtnValue.click();
         return;
       }
-
-      const rewardIframe = document.getElementById("panelFlyout");
+      let rewardIframe = document.getElementById("panelFlyout");
+      if (rewardIframe === null) {
+        console.log(
+          "No reward panel iframe was found. Pressing id_rh again..."
+        );
+        document.getElementById("id_rh").click();
+        new Promise((resolve) => setTimeout(resolve, 5000));
+        rewardIframe = document.getElementById("panelFlyout");
+      }
+      console.log(rewardIframe);
 
       const rewardIframeDocument = rewardIframe.contentDocument
         ? rewardIframe.contentDocument
-        : rewardiframe.contentWindow.document;
+        : rewardIframe.contentWindow.document;
 
       const elements =
         rewardIframeDocument.getElementsByClassName("promo_cont");
@@ -143,8 +184,6 @@ async function crawlBing(browser, randomSearchResultMax) {
 
       return elements;
     }, clickedTaskElement);
-
-    console.log(elHandleArray);
 
     clickedTaskElement++;
   }

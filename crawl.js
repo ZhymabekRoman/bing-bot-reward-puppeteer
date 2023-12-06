@@ -126,11 +126,16 @@ async function crawlBing(browser, randomSearchResultMax) {
         .catch((_) => {});
       await sleep(2000);
 
+      let panelFlyout = await page.$('#panelFlyout');
+      if (panelFlyout) {
+        break;
+      }
+
       console.log("Pressing #id_rh button");
       await page.evaluate(() => {
         document.getElementById("id_rh").click();
       });
-  
+
       console.log("Wait until panelFlyout is loaded...")
       await page
         .waitForSelector('#panelFlyout', {visible: true})
